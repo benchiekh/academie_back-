@@ -10,11 +10,13 @@ export class UsersService {
   }
 
   create() {
-    return this.prisma.user.create({
+    return (this.prisma.user.create({
       data: {
         name: 'Test User',
         email: 'test@gmail.com',
+        password: 'password123',
+        role: 'PARENT',
       },
-    });
+    }) as any);
   }
 }
