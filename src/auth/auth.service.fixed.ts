@@ -2,34 +2,30 @@ import { Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcryptjs';
-import { Pool } from 'pg';
+import { PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class AuthService {
-  private pool: Pool;
-
+export class AuthServiceFixed {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-  ) {
-    // Créer un pool de connexion PostgreSQL direct
-    this.pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      max: 10,
-    });
+  ) {}
+
+  private getNewPrismaClient(): PrismaClient {
+    return new PrismaClient();
   }
 
   async validateUser(email: string, password: string): Promise<any> {
-    const client = await this.pool.connect();
+    const prisma = this.getNewPrismaClient();
     try {
-      const result = await client.query(`
+      const users = await prisma.$queryRawUnsafe(`
         SELECT id, name, email, password, role, "createdAt", "updatedAt" 
         FROM "User" 
-        WHERE email = $1
+        WHERE email = '${email.replace(/'/g, "''")}'
         LIMIT 1
-      `, [email]);
+      `) as any[];
 
-      const user = result.rows[0];
+      const user = users[0];
       
       if (user && user.password && (await bcrypt.compare(password, user.password))) {
         const { password: _, ...result } = user;
@@ -40,7 +36,7 @@ export class AuthService {
       console.error('Erreur validateUser:', error);
       return null;
     } finally {
-      client.release();
+      await prisma.$disconnect();
     }
   }
 
@@ -58,74 +54,74 @@ export class AuthService {
   }
 
   async createAdmin() {
-    const client = await this.pool.connect();
+    const prisma = this.getNewPrismaClient();
     try {
       // Vérifier si un admin existe déjà
-      const existingResult = await client.query(`
+      const existingAdmins = await prisma.$queryRawUnsafe(`
         SELECT id, name, email, role, "createdAt", "updatedAt"
         FROM "User" 
         WHERE role = 'ADMIN'
         LIMIT 1
-      `);
+      `) as any[];
 
-      if (existingResult.rows.length > 0) {
-        return existingResult.rows[0];
+      if (existingAdmins.length > 0) {
+        return existingAdmins[0];
       }
 
       const hashedPassword = await bcrypt.hash('admin123', 10);
       
       // Créer l'admin
-      const result = await client.query(`
+      const admins = await prisma.$queryRawUnsafe(`
         INSERT INTO "User" (name, email, password, role, "createdAt", "updatedAt")
-        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES ('Administrateur', 'admin@academie.com', '${hashedPassword}', 'ADMIN', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         RETURNING id, name, email, role, "createdAt", "updatedAt"
-      `, ['Administrateur', 'admin@academie.com', hashedPassword, 'ADMIN']);
+      `) as any[];
 
-      return result.rows[0];
+      return admins[0];
     } catch (error) {
       console.error('Erreur createAdmin:', error);
       throw error;
     } finally {
-      client.release();
+      await prisma.$disconnect();
     }
   }
 
   async createParent(parentData: { name: string; email: string; password: string }) {
-    const client = await this.pool.connect();
+    const prisma = this.getNewPrismaClient();
     try {
       const hashedPassword = await bcrypt.hash(parentData.password, 10);
       
-      const result = await client.query(`
+      const parents = await prisma.$queryRawUnsafe(`
         INSERT INTO "User" (name, email, password, role, "createdAt", "updatedAt")
-        VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        VALUES ('${parentData.name.replace(/'/g, "''")}', '${parentData.email.replace(/'/g, "''")}', '${hashedPassword}', 'PARENT', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         RETURNING id, name, email, role, "createdAt", "updatedAt"
-      `, [parentData.name, parentData.email, hashedPassword, 'PARENT']);
+      `) as any[];
 
-      return result.rows[0];
+      return parents[0];
     } catch (error) {
       console.error('Erreur createParent:', error);
       throw error;
     } finally {
-      client.release();
+      await prisma.$disconnect();
     }
   }
 
   async getParents() {
-    const client = await this.pool.connect();
+    const prisma = this.getNewPrismaClient();
     try {
-      const result = await client.query(`
+      const parents = await prisma.$queryRawUnsafe(`
         SELECT id, name, email, "createdAt"
         FROM "User" 
         WHERE role = 'PARENT'
         ORDER BY "createdAt" DESC
-      `);
+      `) as any[];
 
-      return result.rows;
+      return parents;
     } catch (error) {
       console.error('Erreur getParents:', error);
       return [];
     } finally {
-      client.release();
+      await prisma.$disconnect();
     }
   }
 }
