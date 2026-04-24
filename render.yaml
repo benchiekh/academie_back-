@@ -1,11 +1,11 @@
 services:
-  # API Service avec Supabase
+  # API Service avec Supabase - Simple JS Approach
   - type: web
     name: academie-backend
     env: node
     plan: free
-    buildCommand: rm -rf dist/ && npm ci && npx prisma generate && npm run build && echo "=== BUILD VERIFICATION ===" && ls -la dist/ && echo "=== CHECKING MAIN.JS ===" && find dist/ -name "*.js" | head -10
-    startCommand: npm run start:fixed
+    buildCommand: npm install
+    startCommand: node main.js
     healthCheckPath: /
     envVars:
       - key: NODE_ENV
@@ -17,6 +17,3 @@ services:
         value: postgresql://postgres:[VOTRE_MDP]@db.xxxx.supabase.co:5432/postgres
       - key: JWT_SECRET
         value: votre-secret-jwt-tres-long-et-unique-pour-production
-      # Optimisation mémoire pour plan gratuit
-      - key: NODE_OPTIONS
-        value: --max-old-space-size=512
