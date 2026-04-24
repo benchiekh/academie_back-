@@ -1,0 +1,22 @@
+services:
+  # API Service avec Supabase
+  - type: web
+    name: academie-backend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build && npx prisma generate
+    startCommand: npm run start:prod
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      # Remplacez avec votre vraie URL Supabase
+      - key: DATABASE_URL
+        value: postgresql://postgres:[VOTRE_MDP]@db.xxxx.supabase.co:5432/postgres
+      - key: JWT_SECRET
+        value: votre-secret-jwt-tres-long-et-unique-pour-production
+      # Optimisation mémoire pour plan gratuit
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=512
