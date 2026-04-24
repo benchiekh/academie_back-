@@ -4,8 +4,8 @@ services:
     name: academie-backend
     env: node
     plan: free
-    buildCommand: chmod +x build-debug.sh && ./build-debug.sh
-    startCommand: npm run start:prod
+    buildCommand: rm -rf dist/ && npm ci && npx prisma generate && npm run build && echo "=== BUILD VERIFICATION ===" && ls -la dist/ && echo "=== CHECKING MAIN.JS ===" && find dist/ -name "*.js" | head -10
+    startCommand: npm run start:fixed
     healthCheckPath: /
     envVars:
       - key: NODE_ENV
