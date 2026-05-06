@@ -1,62 +1,30 @@
 const express = require('express');
 const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
 require('dotenv').config();
 
 const app = express();
 
-// Fichier de persistance des données
-const DATA_FILE = path.join(__dirname, 'data.json');
-
-// Fonction pour charger les données depuis le fichier
-function loadData() {
-  try {
-    if (fs.existsSync(DATA_FILE)) {
-      const data = fs.readFileSync(DATA_FILE, 'utf8');
-      const parsed = JSON.parse(data);
-      return parsed.parents || [];
-    }
-  } catch (error) {
-    console.log('Erreur lors du chargement des données:', error);
+// Base de données centralisée en mémoire (accessible par tous les utilisateurs)
+let parents = [
+  {
+    id: 1,
+    name: 'Parent Test 1',
+    email: 'parent1@test.com',
+    password: 'parent123',
+    role: 'PARENT',
+    createdAt: '2026-04-27T10:00:00.000Z'
+  },
+  {
+    id: 2,
+    name: 'Parent Test 2',
+    email: 'parent2@test.com',
+    password: 'parent123',
+    role: 'PARENT',
+    createdAt: '2026-04-27T11:00:00.000Z'
   }
-  
-  // Données par défaut si le fichier n'existe pas
-  return [
-    {
-      id: 1,
-      name: 'Parent Test 1',
-      email: 'parent1@test.com',
-      role: 'PARENT',
-      createdAt: '2026-04-27T10:00:00.000Z'
-    },
-    {
-      id: 2,
-      name: 'Parent Test 2',
-      email: 'parent2@test.com',
-      role: 'PARENT',
-      createdAt: '2026-04-27T11:00:00.000Z'
-    }
-  ];
-}
+];
 
-// Fonction pour sauvegarder les données dans le fichier
-function saveData() {
-  try {
-    const data = {
-      parents: parents,
-      lastUpdated: new Date().toISOString()
-    };
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
-    console.log('Données sauvegardées avec succès');
-  } catch (error) {
-    console.log('Erreur lors de la sauvegarde des données:', error);
-  }
-}
-
-// Charger les données au démarrage
-let parents = loadData();
-console.log(`Chargé ${parents.length} parents depuis le fichier`);
+console.log(`Base de données centralisée initialisée avec ${parents.length} parents`);
 
 // Middleware
 app.use(cors({
@@ -180,14 +148,11 @@ app.post('/auth/create-parent', (req, res) => {
     createdAt: new Date().toISOString()
   };
   
-  // Ajouter à la base de données en mémoire
+  // Ajouter à la base de données centralisée
   parents.push(newParent);
   
-  // Sauvegarder les données dans le fichier
-  saveData();
-  
-  console.log('✅ Compte parent créé:', newParent);
-  console.log('📊 Total parents:', parents.length);
+  console.log('✅ Compte parent créé dans la base centralisée:', newParent);
+  console.log('📊 Total parents dans la base centralisée:', parents.length);
   
   res.json({
     message: 'Parent account created successfully',
