@@ -1,10 +1,31 @@
 const express = require('express');
 const cors = require('cors');
+const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const app = express();
 
-// Base de données centralisée en mémoire (accessible par tous les utilisateurs)
+// Configuration Supabase
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+let supabase = null;
+let useSupabase = false;
+
+// Vérifier si Supabase est configuré
+if (supabaseUrl && supabaseKey && supabaseUrl !== 'https://your-project.supabase.co') {
+  try {
+    supabase = createClient(supabaseUrl, supabaseKey);
+    useSupabase = true;
+    console.log('🗄️  Connexion à Supabase établie');
+  } catch (error) {
+    console.error('❌ Erreur connexion Supabase:', error.message);
+    useSupabase = false;
+  }
+} else {
+  console.log('⚠️  Supabase non configuré - utilisation de la base de données en mémoire');
+}
+
+// Base de données en mémoire comme fallback
 let parents = [
   {
     id: 1,
@@ -12,7 +33,8 @@ let parents = [
     email: 'parent1@test.com',
     password: 'parent123',
     role: 'PARENT',
-    createdAt: '2026-04-27T10:00:00.000Z'
+    createdAt: '2026-04-27T10:00:00.000Z',
+    updatedAt: '2026-04-27T10:00:00.000Z'
   },
   {
     id: 2,
@@ -20,11 +42,10 @@ let parents = [
     email: 'parent2@test.com',
     password: 'parent123',
     role: 'PARENT',
-    createdAt: '2026-04-27T11:00:00.000Z'
+    createdAt: '2026-04-27T11:00:00.000Z',
+    updatedAt: '2026-04-27T11:00:00.000Z'
   }
 ];
-
-console.log(`Base de données centralisée initialisée avec ${parents.length} parents`);
 
 // Middleware
 app.use(cors({
@@ -50,7 +71,7 @@ app.get('/health', (req, res) => {
 });
 
 // Auth routes
-app.post('/auth/login', (req, res) => {
+app.post('/auth/login', async (req, res) => {
   const { email, password } = req.body;
   
   if (!email || !password) {
@@ -86,23 +107,59 @@ app.post('/auth/login', (req, res) => {
       role: 'ADMIN'
     };
   } else {
-    // Chercher dans la base des parents
-    user = parents.find(p => p.email === email);
-    if (user) {
-      // Vérifier le mot de passe du parent
-      // Pour simplifier, on accepte soit 'parent123' soit le mot de passe utilisé lors de la création
-      // Si le mot de passe est stocké dans l'objet parent, on le vérifie
-      if (user.password && password !== user.password) {
-        return res.status(401).json({ error: 'Mot de passe incorrect' });
+    // Chercher dans la base de données
+    if (useSupabase) {
+      try {
+        const { data: user, error } = await supabase
+          .from('User')
+          .select('*')
+          .eq('email', email)
+          .single();
+        
+        if (error) {
+          if (error.code === 'PGRST116') {
+            // Aucun parent trouvé
+            return res.status(401).json({ error: 'Aucun compte trouvé avec cet email' });
+          }
+          console.error('❌ Erreur recherche parent Supabase:', error);
+          return res.status(500).json({ error: 'Erreur serveur' });
+        }
+        
+        if (user) {
+          // Vérifier le mot de passe du parent
+          if (user.password && password !== user.password) {
+            return res.status(401).json({ error: 'Mot de passe incorrect' });
+          }
+          // Si aucun mot de passe n'est stocké, on accepte 'parent123' par défaut
+          if (!user.password && password !== 'parent123') {
+            return res.status(401).json({ error: 'Mot de passe incorrect' });
+          }
+          user = { ...user }; // Copier l'utilisateur trouvé
+        } else {
+          // Si le parent n'existe pas, refuser la connexion
+          return res.status(401).json({ error: 'Aucun compte trouvé avec cet email' });
+        }
+      } catch (error) {
+        console.error('❌ Erreur connexion Supabase:', error);
+        return res.status(500).json({ error: 'Erreur serveur' });
       }
-      // Si aucun mot de passe n'est stocké, on accepte 'parent123' par défaut
-      if (!user.password && password !== 'parent123') {
-        return res.status(401).json({ error: 'Mot de passe incorrect' });
-      }
-      user = { ...user }; // Copier l'utilisateur trouvé
     } else {
-      // Si le parent n'existe pas, refuser la connexion
-      return res.status(401).json({ error: 'Aucun compte trouvé avec cet email' });
+      // Fallback: utiliser la base de données en mémoire
+      user = parents.find(p => p.email === email);
+      if (user) {
+        // Vérifier le mot de passe du parent
+        if (user.password && password !== user.password) {
+          return res.status(401).json({ error: 'Mot de passe incorrect' });
+        }
+        // Si aucun mot de passe n'est stocké, on accepte 'parent123' par défaut
+        if (!user.password && password !== 'parent123') {
+          return res.status(401).json({ error: 'Mot de passe incorrect' });
+        }
+        user = { ...user }; // Copier l'utilisateur trouvé
+      } else {
+        // Si le parent n'existe pas, refuser la connexion
+        return res.status(401).json({ error: 'Aucun compte trouvé avec cet email' });
+      }
     }
   }
   
@@ -117,59 +174,150 @@ app.post('/auth/login', (req, res) => {
   }
 });
 
-// Endpoint de création de compte parent
-app.post('/auth/create-parent', (req, res) => {
+// Endpoint pour créer un compte parent
+app.post('/auth/create-parent', async (req, res) => {
   const { name, email, password, role } = req.body;
   
   console.log('📝 Création compte parent:', { name, email, role });
   
-  // Validation simple
+  // Validation des données
   if (!name || !email || !password) {
     return res.status(400).json({ 
       error: 'Name, email and password are required' 
     });
   }
   
-  // Vérifier si l'email existe déjà
-  const existingParent = parents.find(p => p.email === email);
-  if (existingParent) {
+  // Validation de l'email
+  if (!email.includes('@') || email.length < 5) {
     return res.status(400).json({ 
-      error: 'Email already exists' 
+      error: 'Email invalide' 
     });
   }
   
-  // Créer le nouveau parent
-  const newParent = {
-    id: Date.now(),
-    name,
-    email,
-    password: password, // Stocker le mot de passe pour la connexion
-    role: role || 'PARENT',
-    createdAt: new Date().toISOString()
-  };
+  // Validation du mot de passe
+  if (password.length < 3) {
+    return res.status(400).json({ 
+      error: 'Mot de passe trop court (minimum 3 caractères)' 
+    });
+  }
   
-  // Ajouter à la base de données centralisée
-  parents.push(newParent);
-  
-  console.log('✅ Compte parent créé dans la base centralisée:', newParent);
-  console.log('📊 Total parents dans la base centralisée:', parents.length);
-  
-  res.json({
-    message: 'Parent account created successfully',
-    parent: newParent
-  });
+  if (useSupabase) {
+    try {
+      // Vérifier si l'email existe déjà dans Supabase
+      const { data: existingParent, error: checkError } = await supabase
+        .from('User')
+        .select('*')
+        .eq('email', email)
+        .single();
+      
+      if (checkError && checkError.code !== 'PGRST116') {
+        console.error('❌ Erreur vérification email Supabase:', checkError);
+        return res.status(500).json({ error: 'Erreur serveur' });
+      }
+      
+      if (existingParent) {
+        return res.status(400).json({ 
+          error: 'Email already exists' 
+        });
+      }
+      
+      // Créer le nouvel utilisateur dans Supabase
+      const { data: newParent, error: insertError } = await supabase
+        .from('User')
+        .insert([{
+          name,
+          email,
+          password: password, // En production, il faudrait hasher ce mot de passe
+          role: role || 'PARENT',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }])
+        .select()
+        .single();
+      
+      if (insertError) {
+        console.error('❌ Erreur création parent Supabase:', insertError);
+        return res.status(500).json({ error: 'Erreur lors de la création du compte' });
+      }
+      
+      console.log('✅ Compte parent créé dans Supabase:', newParent);
+      
+      res.json({
+        message: 'Parent account created successfully',
+        parent: newParent
+      });
+      
+    } catch (error) {
+      console.error('❌ Erreur serveur Supabase:', error);
+      res.status(500).json({ error: 'Erreur serveur' });
+    }
+  } else {
+    // Fallback: utiliser la base de données en mémoire
+    const existingParent = parents.find(p => p.email === email);
+    if (existingParent) {
+      return res.status(400).json({ 
+        error: 'Email already exists' 
+      });
+    }
+    
+    const newParent = {
+      id: Date.now(),
+      name,
+      email,
+      password: password,
+      role: role || 'PARENT',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    parents.push(newParent);
+    
+    console.log('✅ Compte parent créé dans la base en mémoire:', newParent);
+    console.log('📊 Total parents dans la base en mémoire:', parents.length);
+    
+    res.json({
+      message: 'Parent account created successfully',
+      parent: newParent
+    });
+  }
 });
 
 // Endpoint pour récupérer tous les parents
-app.get('/auth/parents', (req, res) => {
+app.get('/auth/parents', async (req, res) => {
   console.log('📋 Récupération des parents');
-  console.log('📊 Total parents dans la base:', parents.length);
-  console.log('📋 Contenu de la base:', parents);
   
-  res.json({
-    message: 'Parents retrieved successfully',
-    parents: parents
-  });
+  if (useSupabase) {
+    try {
+      const { data: parents, error } = await supabase
+        .from('User')
+        .select('*')
+        .order('createdAt', { ascending: false });
+      
+      if (error) {
+        console.error('❌ Erreur récupération parents Supabase:', error);
+        return res.status(500).json({ error: 'Erreur lors de la récupération des parents' });
+      }
+      
+      console.log(`📊 ${parents.length} parents récupérés depuis Supabase`);
+      
+      res.json({
+        message: 'Parents retrieved successfully',
+        parents: parents
+      });
+      
+    } catch (error) {
+      console.error('❌ Erreur serveur Supabase:', error);
+      res.status(500).json({ error: 'Erreur serveur' });
+    }
+  } else {
+    // Fallback: utiliser la base de données en mémoire
+    console.log(`📊 ${parents.length} parents récupérés depuis la base en mémoire`);
+    
+    res.json({
+      message: 'Parents retrieved successfully',
+      parents: parents
+    });
+  }
 });
 
 // Endpoint pour mettre à jour un parent
