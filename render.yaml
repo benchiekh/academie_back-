@@ -12,8 +12,13 @@ services:
         value: production
       - key: PORT
         value: 3000
+      # Configuration Supabase - Remplacez avec vos vraies valeurs
+      - key: SUPABASE_URL
+        value: https://dzsivyvbcwfyuwhcnaqn.supabase.co
+      - key: SUPABASE_ANON_KEY
+        value: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR6c2l2eXZiY3dmeXV3aGNuYXFuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY0OTE5NzksImV4cCI6MjA5MjA2Nzk3OX0.IYZyI964sP9I8vUFSNREcIgsWw-KWzhxcUopdoQZwtw
       # Remplacez avec votre vraie URL Supabase
       - key: DATABASE_URL
-        value: postgresql://postgres:[VOTRE_MDP]@db.xxxx.supabase.co:5432/postgres
+        value: postgresql://postgres:09525291Iheb@@db.dzsivyvbcwfyuwhcnaqn.supabase.co:5432/postgres
       - key: JWT_SECRET
         value: votre-secret-jwt-tres-long-et-unique-pour-production
