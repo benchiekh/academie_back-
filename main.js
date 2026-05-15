@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { createClient } = require('@supabase/supabase-js');
+const ws = require('ws');
 require('dotenv').config();
 
 const app = express();
@@ -19,7 +20,16 @@ console.log('🔍 URL placeholder check:', supabaseUrl !== 'https://your-project
 
 if (supabaseUrl && supabaseKey && supabaseUrl !== 'https://your-project.supabase.co') {
   try {
-    supabase = createClient(supabaseUrl, supabaseKey);
+    supabase = createClient(supabaseUrl, supabaseKey, {
+      db: {
+        schema: 'public'
+      },
+      global: {
+        headers: {
+          'X-Client-Info': 'academie-backend'
+        }
+      }
+    });
     useSupabase = true;
     console.log('🗄️  Connexion à Supabase établie');
   } catch (error) {
