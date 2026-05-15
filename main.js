@@ -12,6 +12,11 @@ let supabase = null;
 let useSupabase = false;
 
 // Vérifier si Supabase est configuré
+console.log('🔍 Vérification configuration Supabase...');
+console.log('🔗 Supabase URL:', supabaseUrl);
+console.log('🔑 Supabase Key:', supabaseKey ? 'configured' : 'missing');
+console.log('🔍 URL placeholder check:', supabaseUrl !== 'https://your-project.supabase.co');
+
 if (supabaseUrl && supabaseKey && supabaseUrl !== 'https://your-project.supabase.co') {
   try {
     supabase = createClient(supabaseUrl, supabaseKey);
@@ -23,29 +28,17 @@ if (supabaseUrl && supabaseKey && supabaseUrl !== 'https://your-project.supabase
   }
 } else {
   console.log('⚠️  Supabase non configuré - utilisation de la base de données en mémoire');
+  
+  // En production, échouer si Supabase n'est pas configuré
+  if (process.env.NODE_ENV === 'production') {
+    console.error('❌ ERREUR CRITIQUE: Supabase doit être configuré en production!');
+    console.error('❌ Veuillez vérifier les variables d\'environnement SUPABASE_URL et SUPABASE_ANON_KEY');
+    process.exit(1);
+  }
 }
 
-// Base de données en mémoire comme fallback
-let parents = [
-  {
-    id: 1,
-    name: 'Parent Test 1',
-    email: 'parent1@test.com',
-    password: 'parent123',
-    role: 'PARENT',
-    createdAt: '2026-04-27T10:00:00.000Z',
-    updatedAt: '2026-04-27T10:00:00.000Z'
-  },
-  {
-    id: 2,
-    name: 'Parent Test 2',
-    email: 'parent2@test.com',
-    password: 'parent123',
-    role: 'PARENT',
-    createdAt: '2026-04-27T11:00:00.000Z',
-    updatedAt: '2026-04-27T11:00:00.000Z'
-  }
-];
+// Base de données en mémoire comme fallback (vide pour forcer Supabase)
+let parents = [];
 
 // Middleware
 app.use(cors({
